@@ -21,6 +21,10 @@ export const getUserById = (req, res) => {
 export const createUser = (req, res) => {
   const { name, email } = req.body;
 
+  if (!name || !email) {
+    return res.status(400).json({ message: "name y email son obligatorios" });
+  }
+
   const newUser = {
     id: users.length + 1,
     name,
