@@ -21,6 +21,10 @@ export const getUserById = (req, res) => {
 export const createUser = (req, res) => {
   const { name, email } = req.body;
 
+  if (!name || !email) {
+    return res.status(400).json({ message: "name y email son obligatorios" });
+  }
+
   const newUser = {
     id: users.length + 1,
     name,
@@ -34,6 +38,11 @@ export const createUser = (req, res) => {
 
 export const updateUser = (req, res) => {
   const { name, email } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ message: "name y email son obligatorios" });
+  }
+
   const id = Number(req.params.id);
   const user = users.find((user) => user.id === id);
 
