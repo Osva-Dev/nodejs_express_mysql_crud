@@ -1,10 +1,13 @@
+import { findAll } from "./user.repository.js";
+
 const users = [
   { id: 1, name: "Ana López", email: "ana@mail.com" },
   { id: 2, name: "Carlos Ruiz", email: "carlos@mail.com" },
 ];
 
-export const getUsers = (req, res) => {
-  res.json(users);
+export const getUsers = async (req, res) => {
+  const allUsers = await findAll();
+  res.json(allUsers);
 };
 
 export const getUserById = (req, res) => {
