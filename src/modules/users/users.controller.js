@@ -1,4 +1,4 @@
-import { findAll, create } from "./user.repository.js";
+import { findAll, create, update } from "./user.repository.js";
 
 export const getUsers = async (req, res) => {
   const allUsers = await findAll();
@@ -17,18 +17,7 @@ export const createUser = async (req, res) => {
   res.status(201).json(newUser);
 };
 
-export const getUserById = (req, res) => {
-  const id = Number(req.params.id);
-  const user = users.find((user) => user.id === id);
-
-  if (!user) {
-    return res.status(404).json({ message: "Usuario no encontrado" });
-  }
-
-  res.json(user);
-};
-
-export const updateUser = (req, res) => {
+export const updateUser = async (req, res) => {
   const { name, email } = req.body;
 
   if (!name || !email) {
@@ -36,14 +25,21 @@ export const updateUser = (req, res) => {
   }
 
   const id = Number(req.params.id);
+  const updated = await update(id, { name, email });
+
+  if (!updated) {
+    return res.status(404).json({ message: "Usuario no encontrado" });
+  }
+
+  res.json({ id, name, email });
+};
+export const getUserById = (req, res) => {
+  const id = Number(req.params.id);
   const user = users.find((user) => user.id === id);
 
   if (!user) {
     return res.status(404).json({ message: "Usuario no encontrado" });
   }
-
-  user.name = name;
-  user.email = email;
 
   res.json(user);
 };
