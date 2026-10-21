@@ -1,13 +1,20 @@
-import { findAll } from "./user.repository.js";
-
-const users = [
-  { id: 1, name: "Ana López", email: "ana@mail.com" },
-  { id: 2, name: "Carlos Ruiz", email: "carlos@mail.com" },
-];
+import { findAll, create } from "./user.repository.js";
 
 export const getUsers = async (req, res) => {
   const allUsers = await findAll();
   res.json(allUsers);
+};
+
+export const createUser = async (req, res) => {
+  const { name, email } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ message: "name y email son obligatorios" });
+  }
+
+  const newUser = await create({ name, email });
+
+  res.status(201).json(newUser);
 };
 
 export const getUserById = (req, res) => {
@@ -19,24 +26,6 @@ export const getUserById = (req, res) => {
   }
 
   res.json(user);
-};
-
-export const createUser = (req, res) => {
-  const { name, email } = req.body;
-
-  if (!name || !email) {
-    return res.status(400).json({ message: "name y email son obligatorios" });
-  }
-
-  const newUser = {
-    id: users.length + 1,
-    name,
-    email,
-  };
-
-  users.push(newUser);
-
-  res.status(201).json(newUser);
 };
 
 export const updateUser = (req, res) => {
