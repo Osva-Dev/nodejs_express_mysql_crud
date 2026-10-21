@@ -5,6 +5,14 @@ export const findAll = async () => {
   return rows;
 };
 
+export const findById = async (id) => {
+  const [rows] = await pool.query(
+    "SELECT id, name, email FROM users WHERE id = ?",
+    [id],
+  );
+
+  return rows[0];
+};
 export const create = async ({ name, email }) => {
   const [result] = await pool.query(
     "INSERT INTO users (name, email) VALUES (?, ?)",

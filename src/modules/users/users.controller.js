@@ -1,8 +1,25 @@
-import { findAll, create, update, remove } from "./user.repository.js";
+import {
+  findAll,
+  findById,
+  create,
+  update,
+  remove,
+} from "./users.repository.js";
 
 export const getUsers = async (req, res) => {
   const allUsers = await findAll();
   res.json(allUsers);
+};
+
+export const getUserById = async (req, res) => {
+  const id = Number(req.params.id);
+  const user = await findById(id);
+
+  if (!user) {
+    return res.status(404).json({ message: "Usuario no encontrado" });
+  }
+
+  res.json(user);
 };
 
 export const createUser = async (req, res) => {
@@ -43,15 +60,4 @@ export const deleteUser = async (req, res) => {
   }
 
   res.json({ message: "Usuario eliminado." });
-};
-
-export const getUserById = (req, res) => {
-  const id = Number(req.params.id);
-  const user = users.find((user) => user.id === id);
-
-  if (!user) {
-    return res.status(404).json({ message: "Usuario no encontrado" });
-  }
-
-  res.json(user);
 };
