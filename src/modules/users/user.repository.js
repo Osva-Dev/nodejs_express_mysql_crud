@@ -13,3 +13,12 @@ export const create = async ({ name, email }) => {
 
   return { id: result.insertId, name, email };
 };
+
+export const update = async (id, { name, email }) => {
+  const [result] = await pool.query(
+    "UPDATE users SET name = ?, email = ? WHERE id = ?",
+    [name, email, id],
+  );
+
+  return result.affectedRows > 0;
+};
