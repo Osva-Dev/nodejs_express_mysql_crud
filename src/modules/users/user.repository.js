@@ -22,3 +22,9 @@ export const update = async (id, { name, email }) => {
 
   return result.affectedRows > 0;
 };
+
+export const remove = async (id) => {
+  const [result] = await pool.query("DELETE FROM users WHERE id = ?", [id]);
+
+  return result.affectedRows > 0;
+};
