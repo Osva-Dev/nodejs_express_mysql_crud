@@ -5,6 +5,14 @@ export const findAll = async () => {
   return rows;
 };
 
+export const findById = async (id) => {
+  const [rows] = await pool.query(
+    "SELECT id, name, email FROM users WHERE id = ?",
+    [id],
+  );
+
+  return rows[0];
+};
 export const create = async ({ name, email }) => {
   const [result] = await pool.query(
     "INSERT INTO users (name, email) VALUES (?, ?)",
@@ -19,6 +27,12 @@ export const update = async (id, { name, email }) => {
     "UPDATE users SET name = ?, email = ? WHERE id = ?",
     [name, email, id],
   );
+
+  return result.affectedRows > 0;
+};
+
+export const remove = async (id) => {
+  const [result] = await pool.query("DELETE FROM users WHERE id = ?", [id]);
 
   return result.affectedRows > 0;
 };

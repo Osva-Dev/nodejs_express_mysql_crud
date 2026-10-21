@@ -1,8 +1,25 @@
-import { findAll, create, update } from "./user.repository.js";
+import {
+  findAll,
+  findById,
+  create,
+  update,
+  remove,
+} from "./users.repository.js";
 
 export const getUsers = async (req, res) => {
   const allUsers = await findAll();
   res.json(allUsers);
+};
+
+export const getUserById = async (req, res) => {
+  const id = Number(req.params.id);
+  const user = await findById(id);
+
+  if (!user) {
+    return res.status(404).json({ message: "Usuario no encontrado" });
+  }
+
+  res.json(user);
 };
 
 export const createUser = async (req, res) => {
@@ -33,27 +50,14 @@ export const updateUser = async (req, res) => {
 
   res.json({ id, name, email });
 };
-export const getUserById = (req, res) => {
-  const id = Number(req.params.id);
-  const user = users.find((user) => user.id === id);
 
-  if (!user) {
+export const deleteUser = async (req, res) => {
+  const id = Number(req.params.id);
+  const removed = await remove(id);
+
+  if (!removed) {
     return res.status(404).json({ message: "Usuario no encontrado" });
   }
 
-  res.json(user);
-};
-
-export const deleteUser = (req, res) => {
-  const id = Number(req.params.id);
-  const index = users.findIndex((user) => user.id === id);
-
-  if (users.id === -1) {
-    return res.status(404).json({ message: "Usuario no encontrado" });
-  }
-  users.splice(index, 1);
-
-  res.status(204).send();
-
-  return res.status(200).json({ message: "Usuario Eliminado" });
+  res.json({ message: "Usuario eliminado." });
 };
