@@ -1,14 +1,14 @@
 # Users CRUD API
 
-API REST para la gestión de usuarios, construida con **Node.js**, **Express** y **MySQL**. Permite crear, consultar, actualizar y eliminar usuarios.
+API REST para la gestión de usuarios, construida con **Node.js**, **Express** y **MySQL**. Permite crear, consultar, actualizar y eliminar usuarios, con persistencia real en base de datos.
 
-> 🚧 **Estado del proyecto:** en desarrollo. La migración de memoria a MySQL se hace operación por operación. Consulta la tabla de [Endpoints](#endpoints) para ver cuáles ya persisten en la base de datos y el [Roadmap](#roadmap) para lo que sigue.
+> ✅ **Estado del proyecto:** el CRUD completo funciona sobre MySQL. Las siguientes mejoras (manejo de email duplicado, validación de formato y manejo centralizado de errores) están en el [Roadmap](#roadmap).
 
 ---
 
 ## Características
 
-- CRUD de usuarios con persistencia en **MySQL** (migración en progreso)
+- CRUD completo de usuarios con persistencia en **MySQL**
 - Arquitectura modular, organizada por funcionalidad
 - Separación de responsabilidades: rutas, controladores y repositorio
 - Consultas SQL **parametrizadas** (protección contra inyección SQL)
@@ -122,13 +122,11 @@ nodejs_express_mysql_crud/
 ├── src/
 │   ├── config/
 │   │   └── database.js                # Pool de conexiones a MySQL
-│   ├── middlewares/                   # Funciones entre petición y respuesta
 │   ├── modules/
 │   │   └── users/
 │   │       ├── users.routes.js        # Define las URLs y métodos HTTP
 │   │       ├── users.controller.js    # Recibe la petición y responde
 │   │       └── users.repository.js    # Consultas SQL (acceso a datos)
-│   ├── utils/                         # Utilidades reutilizables
 │   ├── app.js                         # Configura Express y registra las rutas
 │   └── server.js                      # Enciende el servidor
 ├── .gitignore
@@ -156,15 +154,13 @@ Cliente → routes → controller → repository → MySQL
 
 **URL base:** `http://localhost:3000/api/users`
 
-| Método | Endpoint | Descripción | Almacenamiento |
-|---|---|---|---|
-| `GET` | `/api/users` | Obtener todos los usuarios | ✅ MySQL |
-| `GET` | `/api/users/:id` | Obtener un usuario por su ID | ⏳ Memoria (pendiente) |
-| `POST` | `/api/users` | Crear un usuario | ✅ MySQL |
-| `PUT` | `/api/users/:id` | Actualizar un usuario | ✅ MySQL |
-| `DELETE` | `/api/users/:id` | Eliminar un usuario | ⏳ Memoria (pendiente) |
-
-> Mientras la migración no termine, `GET /api/users/:id` y `DELETE /api/users/:id` trabajan sobre un arreglo en memoria y **no ven** los usuarios guardados en MySQL.
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET` | `/api/users` | Obtener todos los usuarios |
+| `GET` | `/api/users/:id` | Obtener un usuario por su ID |
+| `POST` | `/api/users` | Crear un usuario |
+| `PUT` | `/api/users/:id` | Actualizar un usuario |
+| `DELETE` | `/api/users/:id` | Eliminar un usuario |
 
 ### Obtener todos los usuarios
 
@@ -179,6 +175,24 @@ GET /api/users
   { "id": 1, "name": "Osvaldo Ochoa", "email": "osva@gmail.com" },
   { "id": 2, "name": "Isai Castillo", "email": "isai@gmail.com" }
 ]
+```
+
+### Obtener un usuario por ID
+
+```http
+GET /api/users/1
+```
+
+**Respuesta `200 OK`:**
+
+```json
+{ "id": 1, "name": "Osvaldo Ochoa", "email": "osva@gmail.com" }
+```
+
+**Respuesta `404 Not Found`** (si el ID no existe):
+
+```json
+{ "message": "Usuario no encontrado" }
 ```
 
 ### Crear un usuario
@@ -243,6 +257,24 @@ Content-Type: application/json
 { "message": "Usuario no encontrado" }
 ```
 
+### Eliminar un usuario
+
+```http
+DELETE /api/users/3
+```
+
+**Respuesta `200 OK`:**
+
+```json
+{ "message": "Usuario eliminado" }
+```
+
+**Respuesta `404 Not Found`** (si el ID no existe):
+
+```json
+{ "message": "Usuario no encontrado" }
+```
+
 ### Códigos de estado utilizados
 
 | Código | Significado |
@@ -268,6 +300,9 @@ Ejemplo con `curl`:
 # Listar usuarios
 curl http://localhost:3000/api/users
 
+# Obtener un usuario por ID
+curl http://localhost:3000/api/users/1
+
 # Crear un usuario
 curl -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
@@ -277,15 +312,18 @@ curl -X POST http://localhost:3000/api/users \
 curl -X PUT http://localhost:3000/api/users/1 \
   -H "Content-Type: application/json" \
   -d '{"name":"Osvaldo Actualizado","email":"osva@gmail.com"}'
+
+# Eliminar un usuario
+curl -X DELETE http://localhost:3000/api/users/3
 ```
 
 ---
 
 ## Limitaciones actuales
 
-- `GET /api/users/:id` y `DELETE /api/users/:id` aún usan datos en memoria.
 - Un email repetido produce un error `500` en lugar de un `409 Conflict` con un mensaje claro.
 - No se valida el formato del email.
+- Un `id` que no sea numérico (por ejemplo `/api/users/abc`) no se valida de forma explícita.
 - Los errores de base de datos no se capturan de forma centralizada.
 
 ## Roadmap
@@ -300,8 +338,8 @@ curl -X PUT http://localhost:3000/api/users/1 \
 - [x] `GET /api/users` con MySQL
 - [x] `POST /api/users` con MySQL
 - [x] `PUT /api/users/:id` con MySQL
-- [ ] `GET /api/users/:id` con MySQL
-- [ ] `DELETE /api/users/:id` con MySQL
+- [x] `GET /api/users/:id` con MySQL
+- [x] `DELETE /api/users/:id` con MySQL
 - [ ] Manejo de email duplicado (`409`)
 - [ ] Validación del formato del email
 - [ ] Manejo centralizado de errores
