@@ -2,7 +2,7 @@
 
 API REST para la gestión de usuarios, construida con **Node.js**, **Express** y **MySQL**. Permite crear, consultar, actualizar y eliminar usuarios, con persistencia real en base de datos.
 
-> ✅ **Estado del proyecto:** el CRUD completo funciona sobre MySQL. Las siguientes mejoras (manejo de email duplicado, validación de formato y manejo centralizado de errores) están en el [Roadmap](#roadmap).
+> ✅ **Estado del proyecto:** el CRUD completo funciona sobre MySQL. Las siguientes etapas (manejo de errores, registro, login con JWT y una interfaz web) están descritas en [Próximas actualizaciones](#próximas-actualizaciones).
 
 ---
 
@@ -325,8 +325,64 @@ curl -X DELETE http://localhost:3000/api/users/3
 - No se valida el formato del email.
 - Un `id` que no sea numérico (por ejemplo `/api/users/abc`) no se valida de forma explícita.
 - Los errores de base de datos no se capturan de forma centralizada.
+- Los endpoints no requieren autenticación: cualquiera puede crear, modificar o eliminar usuarios.
+
+---
+
+## Próximas actualizaciones
+
+El objetivo es convertir el CRUD en una aplicación completa y demostrable: con registro, inicio de sesión, rutas protegidas y una interfaz web. Se trabajará por fases, cada una con su issue, su rama y su Pull Request.
+
+| Fase | Qué se construye | Qué resuelve |
+|---|---|---|
+| **0. Manejo de errores** | Middleware de errores y `404` en JSON; `409` por email duplicado | Respuestas claras en lugar de errores `500` en HTML |
+| **1. Base de datos** | Columna `password_hash` y `created_at` en `users` | Preparar la tabla para guardar credenciales |
+| **2. Registro** | `POST /api/auth/register` con contraseñas cifradas con **bcrypt** | Crear cuentas sin guardar contraseñas en texto plano |
+| **3. Login** | `POST /api/auth/login` que devuelve un token **JWT** | Identificar al usuario en cada petición |
+| **4. Rutas protegidas** | Middleware de autenticación | Que solo usuarios con sesión accedan al CRUD |
+| **5. Validaciones** | Formato del email, `:id` numérico, validación en middleware | Rechazar datos inválidos antes de llegar al controlador |
+| **6. Frontend** | Interfaz web con pantallas de registro, login y lista de usuarios | Mostrar el proyecto funcionando de punta a punta |
+| **7. Presentación** | README final y video de demostración | Documentar y explicar el proyecto |
+
+### Estructura prevista
+
+```
+nodejs_express_mysql_crud/
+├── frontend/                          # Interfaz web (HTML, CSS y JavaScript)
+├── src/
+│   ├── config/
+│   ├── middlewares/
+│   │   ├── error-handler.middleware.js
+│   │   ├── not-found.middleware.js
+│   │   └── auth.middleware.js
+│   ├── modules/
+│   │   ├── auth/                      # Registro y login
+│   │   │   ├── auth.routes.js
+│   │   │   ├── auth.controller.js
+│   │   │   └── auth.service.js
+│   │   └── users/
+│   └── utils/
+└── ...
+```
+
+### Endpoints previstos
+
+| Método | Endpoint | Descripción | Acceso |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Crear una cuenta | Público |
+| `POST` | `/api/auth/login` | Iniciar sesión y obtener un token | Público |
+| `GET` | `/api/users` | Listar usuarios | Requiere token |
+| `GET` | `/api/users/:id` | Obtener un usuario | Requiere token |
+| `PUT` | `/api/users/:id` | Actualizar un usuario | Requiere token |
+| `DELETE` | `/api/users/:id` | Eliminar un usuario | Requiere token |
+
+> Esta sección describe trabajo **planificado**, no implementado. Se irá marcando en el [Roadmap](#roadmap) conforme avance.
+
+---
 
 ## Roadmap
+
+### Completado
 
 - [x] Servidor con Express y ES Modules
 - [x] Estructura modular
@@ -335,18 +391,22 @@ curl -X DELETE http://localhost:3000/api/users/3
 - [x] Variables de entorno con `.env`
 - [x] Conexión a MySQL con pool de conexiones
 - [x] Capa `repository`
-- [x] `GET /api/users` con MySQL
-- [x] `POST /api/users` con MySQL
-- [x] `PUT /api/users/:id` con MySQL
-- [x] `GET /api/users/:id` con MySQL
-- [x] `DELETE /api/users/:id` con MySQL
-- [ ] Manejo de email duplicado (`409`)
+- [x] CRUD completo de usuarios con MySQL
+
+### Pendiente
+
+- [ ] Middleware de errores y manejo de email duplicado (`409`)
+- [ ] Middleware `not-found` con respuesta en JSON
 - [ ] Validación del formato del email
-- [ ] Manejo centralizado de errores
+- [ ] Validación del `:id` numérico
+- [ ] Registro de usuarios con contraseña cifrada (bcrypt)
+- [ ] Login con token JWT
+- [ ] Middleware de autenticación para proteger rutas
 - [ ] Capa `service`
 - [ ] Archivo `.env.example`
+- [ ] Interfaz web (frontend)
 - [ ] Pruebas automáticas
-- [ ] Autenticación con JWT
+- [ ] Video de demostración
 
 ---
 
