@@ -24,22 +24,12 @@ export const getUserById = async (req, res) => {
 
 export const createUser = async (req, res) => {
   const { name, email } = req.body;
-
-  if (!name || !email) {
-    return res.status(400).json({ message: "name y email son obligatorios" });
-  }
-
   const newUser = await create({ name, email });
-
   res.status(201).json(newUser);
 };
 
 export const updateUser = async (req, res) => {
   const { name, email } = req.body;
-
-  if (!name || !email) {
-    return res.status(400).json({ message: "name y email son obligatorios" });
-  }
 
   const id = Number(req.params.id);
   const updated = await update(id, { name, email });
