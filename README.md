@@ -1,8 +1,8 @@
 # Users CRUD API
 
-API REST para la gestión de usuarios, construida con **Node.js**, **Express** y **MySQL**. Permite crear, consultar, actualizar y eliminar usuarios, con persistencia real en base de datos.
+API REST para la gestión de usuarios, construida con **Node.js**, **Express** y **MySQL**. Permite crear, consultar, actualizar y eliminar usuarios, con persistencia real en base de datos, validación de datos y manejo centralizado de errores.
 
-> ✅ **Estado del proyecto:** el CRUD completo funciona sobre MySQL. Las siguientes etapas (manejo de errores, registro, login con JWT y una interfaz web) están descritas en [Próximas actualizaciones](#próximas-actualizaciones).
+> ✅ **Estado del proyecto:** el CRUD completo funciona sobre MySQL, con middlewares de validación y de errores. Las siguientes etapas (registro, login con JWT y una interfaz web) están descritas en [Próximas actualizaciones](#próximas-actualizaciones).
 
 ---
 
@@ -10,11 +10,12 @@ API REST para la gestión de usuarios, construida con **Node.js**, **Express** y
 
 - CRUD completo de usuarios con persistencia en **MySQL**
 - Arquitectura modular, organizada por funcionalidad
-- Separación de responsabilidades: rutas, controladores y repositorio
+- Separación de responsabilidades: rutas, middlewares, controladores y repositorio
 - Consultas SQL **parametrizadas** (protección contra inyección SQL)
 - Pool de conexiones con `mysql2`
 - Configuración mediante variables de entorno (`.env`)
-- Validación de datos de entrada en `POST` y `PUT`
+- **Middlewares de validación:** campos obligatorios, formato del email e `id` numérico
+- **Manejo centralizado de errores:** `409` por email duplicado, `404` en JSON y `500` sin exponer detalles internos
 - Uso de **ES Modules** (`import` / `export`)
 - Recarga automática en desarrollo con **nodemon**
 
@@ -121,14 +122,19 @@ El proyecto usa una **estructura por módulos** (*feature-based*): todo lo relac
 nodejs_express_mysql_crud/
 ├── src/
 │   ├── config/
-│   │   └── database.js                # Pool de conexiones a MySQL
+│   │   └── database.js                        # Pool de conexiones a MySQL
+│   ├── middlewares/
+│   │   ├── error-handler.middleware.js        # Traduce errores a respuestas JSON (409, 500)
+│   │   ├── not-found.middleware.js            # Responde 404 en JSON a rutas inexistentes
+│   │   ├── validate-id.middleware.js          # Valida que :id sea un entero positivo
+│   │   └── validate-user.middleware.js        # Valida name, email y su formato
 │   ├── modules/
 │   │   └── users/
-│   │       ├── users.routes.js        # Define las URLs y métodos HTTP
-│   │       ├── users.controller.js    # Recibe la petición y responde
-│   │       └── users.repository.js    # Consultas SQL (acceso a datos)
-│   ├── app.js                         # Configura Express y registra las rutas
-│   └── server.js                      # Enciende el servidor
+│   │       ├── users.routes.js                # Define las URLs, métodos HTTP y middlewares
+│   │       ├── users.controller.js            # Recibe la petición y responde
+│   │       └── users.repository.js            # Consultas SQL (acceso a datos)
+│   ├── app.js                                 # Configura Express y registra rutas y middlewares
+│   └── server.js                              # Enciende el servidor
 ├── .gitignore
 ├── package.json
 └── README.md
@@ -137,16 +143,33 @@ nodejs_express_mysql_crud/
 ### Flujo de una petición
 
 ```
-Cliente → routes → controller → repository → MySQL
+Cliente → routes → middlewares de validación → controller → repository → MySQL
+                          │                         │
+                          └── 400 si es inválido    └── error → errorHandler (409 / 500)
 ```
 
 | Capa | Responsabilidad |
 |---|---|
-| **routes** | Asocia cada URL y método HTTP con una función del controlador |
-| **controller** | Recibe la petición (`req`), valida los datos y decide qué responder (`res`) |
+| **routes** | Asocia cada URL y método HTTP con sus middlewares y su controlador |
+| **middlewares** | Validan la petición antes del controlador y centralizan el manejo de errores |
+| **controller** | Recibe la petición (`req`) y decide qué responder (`res`) |
 | **repository** | Es el único lugar con SQL: ejecuta las consultas e informa el resultado |
 
-`app.js` y `server.js` están separados a propósito: `app.js` define **qué hace** la aplicación y `server.js` solo **la enciende**. Esto facilita las pruebas automáticas a futuro.
+**Decisiones de diseño:**
+
+- Las validaciones de la **petición** (campos, formato, id) viven en middlewares y se escriben una sola vez.
+- La unicidad del email la garantiza la restricción `UNIQUE` de MySQL; `errorHandler` traduce ese error a un `409`. Así se evita la condición de carrera de consultar antes de insertar.
+- Express 5 envía automáticamente al `errorHandler` los errores de las funciones `async`, por lo que los controladores no necesitan `try/catch`.
+- `app.js` y `server.js` están separados a propósito: `app.js` define **qué hace** la aplicación y `server.js` solo **la enciende**. Esto facilita las pruebas automáticas a futuro.
+
+### Convenciones
+
+- Archivos: `nombre.rol.js` en minúsculas (`users.controller.js`)
+- Funciones y variables: `camelCase` (`getUserById`)
+- Tablas y columnas: `snake_case` en minúsculas, y plural para tablas (`users`)
+- Commits: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`)
+- Ramas: `main` (estable) y `develop` (integración), con ramas `feat/...` o `fix/...` por tarea
+- Cada tarea se planifica con un **Issue** y se integra mediante **Pull Request**
 
 ---
 
@@ -189,6 +212,12 @@ GET /api/users/1
 { "id": 1, "name": "Osvaldo Ochoa", "email": "osva@gmail.com" }
 ```
 
+**Respuesta `400 Bad Request`** (si el ID no es un entero positivo, por ejemplo `/api/users/abc`):
+
+```json
+{ "message": "El id debe ser un número entero positivo" }
+```
+
 **Respuesta `404 Not Found`** (si el ID no existe):
 
 ```json
@@ -223,6 +252,18 @@ Content-Type: application/json
 { "message": "name y email son obligatorios" }
 ```
 
+**Respuesta `400 Bad Request`** (si el email no tiene un formato válido):
+
+```json
+{ "message": "El formato del email no es válido" }
+```
+
+**Respuesta `409 Conflict`** (si el email ya está registrado):
+
+```json
+{ "message": "El email ya está registrado" }
+```
+
 ### Actualizar un usuario
 
 ```http
@@ -245,17 +286,15 @@ Content-Type: application/json
 { "id": 1, "name": "Osvaldo Ochoa Actualizado", "email": "osva@gmail.com" }
 ```
 
-**Respuesta `400 Bad Request`** (si falta `name` o `email`):
+**Respuestas de error:**
 
-```json
-{ "message": "name y email son obligatorios" }
-```
-
-**Respuesta `404 Not Found`** (si el ID no existe):
-
-```json
-{ "message": "Usuario no encontrado" }
-```
+| Código | Cuándo | Mensaje |
+|---|---|---|
+| `400` | El ID no es un entero positivo | `El id debe ser un número entero positivo` |
+| `400` | Falta `name` o `email` | `name y email son obligatorios` |
+| `400` | El email no tiene formato válido | `El formato del email no es válido` |
+| `404` | El ID no existe | `Usuario no encontrado` |
+| `409` | El email pertenece a otro usuario | `El email ya está registrado` |
 
 ### Eliminar un usuario
 
@@ -269,10 +308,30 @@ DELETE /api/users/3
 { "message": "Usuario eliminado" }
 ```
 
+**Respuesta `400 Bad Request`** (si el ID no es un entero positivo):
+
+```json
+{ "message": "El id debe ser un número entero positivo" }
+```
+
 **Respuesta `404 Not Found`** (si el ID no existe):
 
 ```json
 { "message": "Usuario no encontrado" }
+```
+
+### Rutas inexistentes y errores inesperados
+
+Cualquier ruta que no exista responde en JSON:
+
+```json
+{ "message": "Ruta no encontrada" }
+```
+
+Los errores inesperados responden `500` con un mensaje genérico. El detalle real solo se registra en la consola del servidor y nunca se envía al cliente:
+
+```json
+{ "message": "Error interno del servidor" }
 ```
 
 ### Códigos de estado utilizados
@@ -281,8 +340,10 @@ DELETE /api/users/3
 |---|---|
 | `200` | OK: la petición fue exitosa |
 | `201` | Created: el recurso se creó correctamente |
-| `400` | Bad Request: faltan datos obligatorios |
+| `400` | Bad Request: datos obligatorios ausentes o con formato inválido |
 | `404` | Not Found: el recurso o la ruta no existe |
+| `409` | Conflict: el email ya está registrado |
+| `500` | Internal Server Error: error inesperado del servidor |
 
 ---
 
@@ -315,34 +376,35 @@ curl -X PUT http://localhost:3000/api/users/1 \
 
 # Eliminar un usuario
 curl -X DELETE http://localhost:3000/api/users/3
+
+# Probar una validación (devuelve 400)
+curl http://localhost:3000/api/users/abc
 ```
 
 ---
 
 ## Limitaciones actuales
 
-- Un email repetido produce un error `500` en lugar de un `409 Conflict` con un mensaje claro.
-- No se valida el formato del email.
-- Un `id` que no sea numérico (por ejemplo `/api/users/abc`) no se valida de forma explícita.
-- Los errores de base de datos no se capturan de forma centralizada.
 - Los endpoints no requieren autenticación: cualquiera puede crear, modificar o eliminar usuarios.
+- Los usuarios no tienen contraseña, por lo que todavía no existe registro ni inicio de sesión.
+- No hay pruebas automáticas.
 
 ---
 
 ## Próximas actualizaciones
 
-El objetivo es convertir el CRUD en una aplicación completa y demostrable: con registro, inicio de sesión, rutas protegidas y una interfaz web. Se trabajará por fases, cada una con su issue, su rama y su Pull Request.
+El objetivo es convertir el CRUD en una aplicación completa y demostrable: con registro, inicio de sesión, rutas protegidas y una interfaz web. Se trabaja por fases, cada una con su issue, su rama y su Pull Request.
 
-| Fase | Qué se construye | Qué resuelve |
-|---|---|---|
-| **0. Manejo de errores** | Middleware de errores y `404` en JSON; `409` por email duplicado | Respuestas claras en lugar de errores `500` en HTML |
-| **1. Base de datos** | Columna `password_hash` y `created_at` en `users` | Preparar la tabla para guardar credenciales |
-| **2. Registro** | `POST /api/auth/register` con contraseñas cifradas con **bcrypt** | Crear cuentas sin guardar contraseñas en texto plano |
-| **3. Login** | `POST /api/auth/login` que devuelve un token **JWT** | Identificar al usuario en cada petición |
-| **4. Rutas protegidas** | Middleware de autenticación | Que solo usuarios con sesión accedan al CRUD |
-| **5. Validaciones** | Formato del email, `:id` numérico, validación en middleware | Rechazar datos inválidos antes de llegar al controlador |
-| **6. Frontend** | Interfaz web con pantallas de registro, login y lista de usuarios | Mostrar el proyecto funcionando de punta a punta |
-| **7. Presentación** | README final y video de demostración | Documentar y explicar el proyecto |
+| Fase | Qué se construye | Qué resuelve | Estado |
+|---|---|---|---|
+| **0. Manejo de errores** | Middleware de errores y `404` en JSON; `409` por email duplicado | Respuestas claras en lugar de errores `500` en HTML | ✅ Completada |
+| **1. Validaciones** | Formato del email, `:id` numérico, validación en middleware | Rechazar datos inválidos antes de llegar al controlador | ✅ Completada |
+| **2. Base de datos** | Columnas `password_hash` y `created_at` en `users` | Preparar la tabla para guardar credenciales | ⏳ Pendiente |
+| **3. Registro** | `POST /api/auth/register` con contraseñas cifradas con **bcrypt** | Crear cuentas sin guardar contraseñas en texto plano | ⏳ Pendiente |
+| **4. Login** | `POST /api/auth/login` que devuelve un token **JWT** | Identificar al usuario en cada petición | ⏳ Pendiente |
+| **5. Rutas protegidas** | Middleware de autenticación | Que solo usuarios con sesión accedan al CRUD | ⏳ Pendiente |
+| **6. Frontend** | Interfaz web con pantallas de registro, login y lista de usuarios | Mostrar el proyecto funcionando de punta a punta | ⏳ Pendiente |
+| **7. Presentación** | README final y video de demostración | Documentar y explicar el proyecto | ⏳ Pendiente |
 
 ### Estructura prevista
 
@@ -354,14 +416,15 @@ nodejs_express_mysql_crud/
 │   ├── middlewares/
 │   │   ├── error-handler.middleware.js
 │   │   ├── not-found.middleware.js
-│   │   └── auth.middleware.js
-│   ├── modules/
-│   │   ├── auth/                      # Registro y login
-│   │   │   ├── auth.routes.js
-│   │   │   ├── auth.controller.js
-│   │   │   └── auth.service.js
-│   │   └── users/
-│   └── utils/
+│   │   ├── validate-id.middleware.js
+│   │   ├── validate-user.middleware.js
+│   │   └── auth.middleware.js         # Nuevo: verifica el token JWT
+│   └── modules/
+│       ├── auth/                      # Nuevo: registro y login
+│       │   ├── auth.routes.js
+│       │   ├── auth.controller.js
+│       │   └── auth.service.js
+│       └── users/
 └── ...
 ```
 
@@ -376,7 +439,7 @@ nodejs_express_mysql_crud/
 | `PUT` | `/api/users/:id` | Actualizar un usuario | Requiere token |
 | `DELETE` | `/api/users/:id` | Eliminar un usuario | Requiere token |
 
-> Esta sección describe trabajo **planificado**, no implementado. Se irá marcando en el [Roadmap](#roadmap) conforme avance.
+> Las fases pendientes describen trabajo **planificado**, no implementado.
 
 ---
 
@@ -386,19 +449,18 @@ nodejs_express_mysql_crud/
 
 - [x] Servidor con Express y ES Modules
 - [x] Estructura modular
-- [x] CRUD de usuarios en memoria
-- [x] Validación de campos obligatorios en `POST` y `PUT`
 - [x] Variables de entorno con `.env`
 - [x] Conexión a MySQL con pool de conexiones
 - [x] Capa `repository`
 - [x] CRUD completo de usuarios con MySQL
+- [x] Middleware de errores y manejo de email duplicado (`409`)
+- [x] Middleware `not-found` con respuesta en JSON
+- [x] Validación de campos obligatorios y del formato del email
+- [x] Validación del `:id` numérico
+- [x] Flujo de trabajo con issues, ramas y Pull Requests
 
 ### Pendiente
 
-- [ ] Middleware de errores y manejo de email duplicado (`409`)
-- [ ] Middleware `not-found` con respuesta en JSON
-- [ ] Validación del formato del email
-- [ ] Validación del `:id` numérico
 - [ ] Registro de usuarios con contraseña cifrada (bcrypt)
 - [ ] Login con token JWT
 - [ ] Middleware de autenticación para proteger rutas
