@@ -13,10 +13,11 @@ export const findById = async (id) => {
 
   return rows[0];
 };
-export const create = async ({ name, email }) => {
+
+export const create = async ({ name, email, passwordHash }) => {
   const [result] = await pool.query(
-    "INSERT INTO users (name, email) VALUES (?, ?)",
-    [name, email],
+    "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+    [name, email, passwordHash],
   );
 
   return { id: result.insertId, name, email };
