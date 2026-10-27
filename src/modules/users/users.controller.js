@@ -22,12 +22,6 @@ export const getUserById = async (req, res) => {
   res.json(user);
 };
 
-export const createUser = async (req, res) => {
-  const { name, email } = req.body;
-  const newUser = await create({ name, email });
-  res.status(201).json(newUser);
-};
-
 export const updateUser = async (req, res) => {
   const { name, email } = req.body;
 
