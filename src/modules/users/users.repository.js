@@ -37,3 +37,12 @@ export const remove = async (id) => {
 
   return result.affectedRows > 0;
 };
+
+export const findByEmail = async (email) => {
+  const [rows] = await pool.query(
+    "SELECT id, name, email, password_hash FROM users WHERE email = ?",
+    [email],
+  );
+
+  return rows[0];
+};
