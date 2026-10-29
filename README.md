@@ -1,21 +1,23 @@
 # Users CRUD API
 
-API REST para la gestión de usuarios, construida con **Node.js**, **Express** y **MySQL**. Permite crear, consultar, actualizar y eliminar usuarios, con persistencia real en base de datos, validación de datos y manejo centralizado de errores.
+API REST con **autenticación JWT**, construida con **Node.js**, **Express** y **MySQL**. Permite registrar usuarios, iniciar sesión y administrar cuentas mediante un CRUD protegido, con contraseñas cifradas, validación de datos y manejo centralizado de errores.
 
-> ✅ **Estado del proyecto:** el CRUD completo funciona sobre MySQL, con middlewares de validación y de errores. Las siguientes etapas (registro, login con JWT y una interfaz web) están descritas en [Próximas actualizaciones](#próximas-actualizaciones).
+> ✅ **Estado del proyecto:** el backend está completo y probado. Lo que falta (interfaz web, pruebas automáticas y video de demostración) está en el [Roadmap](#roadmap).
 
 ---
 
 ## Características
 
-- CRUD completo de usuarios con persistencia en **MySQL**
+- **Registro e inicio de sesión** con contraseñas cifradas con **bcrypt**
+- **Autenticación con JWT**: las rutas de usuarios solo responden con un token válido
+- CRUD de usuarios con persistencia en **MySQL**
 - Arquitectura modular, organizada por funcionalidad
-- Separación de responsabilidades: rutas, middlewares, controladores y repositorio
+- Separación de responsabilidades: rutas, middlewares, controladores, servicios y repositorio
 - Consultas SQL **parametrizadas** (protección contra inyección SQL)
 - Pool de conexiones con `mysql2`
-- Configuración mediante variables de entorno (`.env`)
-- **Middlewares de validación:** campos obligatorios, formato del email e `id` numérico
+- **Middlewares de validación:** campos obligatorios, formato del email, longitud de la contraseña e `id` numérico
 - **Manejo centralizado de errores:** `409` por email duplicado, `404` en JSON y `500` sin exponer detalles internos
+- Configuración mediante variables de entorno (`.env`)
 - Uso de **ES Modules** (`import` / `export`)
 - Recarga automática en desarrollo con **nodemon**
 
@@ -27,6 +29,8 @@ API REST para la gestión de usuarios, construida con **Node.js**, **Express** y
 | [Express 5](https://expressjs.com/) | Framework web |
 | [MySQL 8](https://www.mysql.com/) | Base de datos |
 | [mysql2](https://github.com/sidorares/node-mysql2) | Driver de MySQL (con promesas) |
+| [bcrypt](https://github.com/kelektiv/node.bcrypt.js) | Cifrado de contraseñas |
+| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken) | Creación y verificación de tokens JWT |
 | [nodemon](https://nodemon.io/) | Recarga automática en desarrollo |
 
 ---
@@ -57,22 +61,28 @@ npm install
 
 **3. Crear la base de datos y la tabla**
 
-Ejecuta este script en MySQL Workbench (o en tu cliente de preferencia):
+Ejecuta el script `database/schema.sql` en MySQL Workbench (**File → Open SQL Script**, y luego el botón del rayo). Es la referencia de la estructura que el código espera, y se puede ejecutar varias veces sin riesgo:
 
 ```sql
-CREATE DATABASE crud_db;
+CREATE DATABASE IF NOT EXISTS crud_db;
 USE crud_db;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
-  email VARCHAR(200) NOT NULL UNIQUE
+  email VARCHAR(200) NOT NULL UNIQUE,
+  password_hash VARCHAR(300) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
 **4. Configurar las variables de entorno**
 
-Crea un archivo `.env` en la raíz del proyecto (junto a `package.json`) con tus datos:
+Copia la plantilla `.env.example` como `.env` y completa tus datos:
+
+```bash
+cp .env.example .env
+```
 
 ```
 PORT=3000
@@ -81,9 +91,17 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=tu_password_aqui
 DB_NAME=crud_db
+JWT_SECRET=genera_una_cadena_larga_y_aleatoria
+JWT_EXPIRES_IN=1h
 ```
 
-> El archivo `.env` está en el `.gitignore` y **nunca debe subirse al repositorio**.
+Para generar un `JWT_SECRET` seguro:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
+```
+
+> El archivo `.env` está en el `.gitignore` y **nunca debe subirse al repositorio**. Quien conozca el `JWT_SECRET` puede fabricar tokens válidos.
 
 **5. Iniciar el servidor en modo desarrollo**
 
@@ -102,7 +120,7 @@ Servidor corriendo en http://localhost:3000
 Abre [http://localhost:3000](http://localhost:3000). Debe responder:
 
 ```json
-{ "message": "API funcionando" }
+{ "message": "API Funcionando" }
 ```
 
 ### Scripts disponibles
@@ -120,21 +138,31 @@ El proyecto usa una **estructura por módulos** (*feature-based*): todo lo relac
 
 ```
 nodejs_express_mysql_crud/
+├── database/
+│   └── schema.sql                             # Estructura de la base de datos (referencia)
 ├── src/
 │   ├── config/
 │   │   └── database.js                        # Pool de conexiones a MySQL
 │   ├── middlewares/
-│   │   ├── error-handler.middleware.js        # Traduce errores a respuestas JSON (409, 500)
+│   │   ├── auth.middleware.js                 # Verifica el token JWT
+│   │   ├── error-handler.middleware.js        # Traduce errores a respuestas JSON (400, 409, 500)
 │   │   ├── not-found.middleware.js            # Responde 404 en JSON a rutas inexistentes
 │   │   ├── validate-id.middleware.js          # Valida que :id sea un entero positivo
+│   │   ├── validate-login.middleware.js       # Valida email y password del login
+│   │   ├── validate-register.middleware.js    # Valida name, email y password del registro
 │   │   └── validate-user.middleware.js        # Valida name, email y su formato
 │   ├── modules/
+│   │   ├── auth/
+│   │   │   ├── auth.routes.js                 # POST /register y POST /login
+│   │   │   ├── auth.controller.js             # Recibe la petición y responde
+│   │   │   └── auth.service.js                # Lógica: cifrar, comparar y firmar tokens
 │   │   └── users/
-│   │       ├── users.routes.js                # Define las URLs, métodos HTTP y middlewares
+│   │       ├── users.routes.js                # URLs, métodos HTTP y middlewares
 │   │       ├── users.controller.js            # Recibe la petición y responde
 │   │       └── users.repository.js            # Consultas SQL (acceso a datos)
 │   ├── app.js                                 # Configura Express y registra rutas y middlewares
 │   └── server.js                              # Enciende el servidor
+├── .env.example                               # Plantilla de variables de entorno
 ├── .gitignore
 ├── package.json
 └── README.md
@@ -143,24 +171,32 @@ nodejs_express_mysql_crud/
 ### Flujo de una petición
 
 ```
-Cliente → routes → middlewares de validación → controller → repository → MySQL
-                          │                         │
-                          └── 400 si es inválido    └── error → errorHandler (409 / 500)
+Registro / login:
+Cliente → routes → validación → controller → service → repository → MySQL
+
+CRUD de usuarios:
+Cliente → authenticate (JWT) → routes → validación → controller → repository → MySQL
+
+Cualquier error → errorHandler (400 / 409 / 500)
 ```
 
 | Capa | Responsabilidad |
 |---|---|
 | **routes** | Asocia cada URL y método HTTP con sus middlewares y su controlador |
-| **middlewares** | Validan la petición antes del controlador y centralizan el manejo de errores |
+| **middlewares** | Autentican, validan la petición y centralizan el manejo de errores |
 | **controller** | Recibe la petición (`req`) y decide qué responder (`res`) |
+| **service** | Lógica de negocio que no es HTTP ni SQL (cifrar contraseñas, comprobarlas, firmar tokens) |
 | **repository** | Es el único lugar con SQL: ejecuta las consultas e informa el resultado |
 
-**Decisiones de diseño:**
+### Decisiones de diseño
 
-- Las validaciones de la **petición** (campos, formato, id) viven en middlewares y se escriben una sola vez.
-- La unicidad del email la garantiza la restricción `UNIQUE` de MySQL; `errorHandler` traduce ese error a un `409`. Así se evita la condición de carrera de consultar antes de insertar.
-- Express 5 envía automáticamente al `errorHandler` los errores de las funciones `async`, por lo que los controladores no necesitan `try/catch`.
-- `app.js` y `server.js` están separados a propósito: `app.js` define **qué hace** la aplicación y `server.js` solo **la enciende**. Esto facilita las pruebas automáticas a futuro.
+- **Contraseñas:** nunca se guardan ni se devuelven en texto plano. Se almacena un hash de bcrypt, que incluye su propio *salt*.
+- **El hash no se filtra:** las consultas piden las columnas de forma explícita (`SELECT id, name, email`), por lo que `password_hash` solo sale de la base de datos en la consulta del login.
+- **Login sin pistas:** un email inexistente y una contraseña incorrecta responden lo mismo (`401`), para no revelar qué emails están registrados.
+- **Rutas públicas y privadas:** `/api/auth` es público; todo `/api/users` exige un token válido.
+- **Unicidad del email:** la garantiza la restricción `UNIQUE` de MySQL, y `errorHandler` traduce ese error a un `409`. Así se evita la condición de carrera de consultar antes de insertar.
+- **Errores en funciones `async`:** Express 5 los envía automáticamente al `errorHandler`, por lo que los controladores no necesitan `try/catch`.
+- **`app.js` y `server.js` separados:** `app.js` define **qué hace** la aplicación y `server.js` solo **la enciende**. Esto facilita las pruebas automáticas a futuro.
 
 ### Convenciones
 
@@ -175,15 +211,95 @@ Cliente → routes → middlewares de validación → controller → repository 
 
 ## Endpoints
 
-**URL base:** `http://localhost:3000/api/users`
+**URL base:** `http://localhost:3000`
 
-| Método | Endpoint | Descripción |
+| Método | Endpoint | Descripción | Acceso |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Crear una cuenta | Público |
+| `POST` | `/api/auth/login` | Iniciar sesión y obtener un token | Público |
+| `GET` | `/api/users` | Obtener todos los usuarios | Requiere token |
+| `GET` | `/api/users/:id` | Obtener un usuario por su ID | Requiere token |
+| `PUT` | `/api/users/:id` | Actualizar un usuario | Requiere token |
+| `DELETE` | `/api/users/:id` | Eliminar un usuario | Requiere token |
+
+### Registro
+
+```http
+POST /api/auth/register
+Content-Type: application/json
+```
+
+**Body:**
+
+```json
+{
+  "name": "Ana López",
+  "email": "ana@mail.com",
+  "password": "Segura1234"
+}
+```
+
+**Respuesta `201 Created`** (nunca incluye la contraseña ni el hash):
+
+```json
+{ "id": 1, "name": "Ana López", "email": "ana@mail.com" }
+```
+
+**Respuestas de error:**
+
+| Código | Cuándo | Mensaje |
 |---|---|---|
-| `GET` | `/api/users` | Obtener todos los usuarios |
-| `GET` | `/api/users/:id` | Obtener un usuario por su ID |
-| `POST` | `/api/users` | Crear un usuario |
-| `PUT` | `/api/users/:id` | Actualizar un usuario |
-| `DELETE` | `/api/users/:id` | Eliminar un usuario |
+| `400` | Falta `name`, `email` o `password` | `name, email y password son obligatorios` |
+| `400` | El email no tiene formato válido | `El formato del email no es válido` |
+| `400` | La contraseña tiene menos de 8 caracteres | `La contraseña debe tener al menos 8 caracteres` |
+| `400` | El cuerpo no es un JSON válido | `El cuerpo de la petición no es un JSON válido` |
+| `409` | El email ya está registrado | `El email ya está registrado` |
+
+### Login
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+```
+
+**Body:**
+
+```json
+{
+  "email": "ana@mail.com",
+  "password": "Segura1234"
+}
+```
+
+**Respuesta `200 OK`:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": { "id": 1, "name": "Ana López", "email": "ana@mail.com" }
+}
+```
+
+**Respuestas de error:**
+
+| Código | Cuándo | Mensaje |
+|---|---|---|
+| `400` | Falta `email` o `password` | `email y password son obligatorios` |
+| `401` | Email inexistente o contraseña incorrecta | `Credenciales inválidas` |
+
+### Usar el token
+
+Todas las rutas de `/api/users` exigen el token en el encabezado `Authorization`, con el formato `Bearer <token>`. El token dura el tiempo definido en `JWT_EXPIRES_IN` (por defecto, una hora).
+
+```http
+GET /api/users
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+| Código | Cuándo | Mensaje |
+|---|---|---|
+| `401` | No se envía el encabezado `Authorization` | `Token requerido` |
+| `401` | El token es inválido o expiró | `Token inválido o expirado` |
 
 ### Obtener todos los usuarios
 
@@ -195,8 +311,8 @@ GET /api/users
 
 ```json
 [
-  { "id": 1, "name": "Osvaldo Ochoa", "email": "osva@gmail.com" },
-  { "id": 2, "name": "Isai Castillo", "email": "isai@gmail.com" }
+  { "id": 1, "name": "Ana López", "email": "ana@mail.com" },
+  { "id": 2, "name": "Carlos Ruiz", "email": "carlos@mail.com" }
 ]
 ```
 
@@ -209,60 +325,15 @@ GET /api/users/1
 **Respuesta `200 OK`:**
 
 ```json
-{ "id": 1, "name": "Osvaldo Ochoa", "email": "osva@gmail.com" }
+{ "id": 1, "name": "Ana López", "email": "ana@mail.com" }
 ```
 
-**Respuesta `400 Bad Request`** (si el ID no es un entero positivo, por ejemplo `/api/users/abc`):
+**Respuestas de error:**
 
-```json
-{ "message": "El id debe ser un número entero positivo" }
-```
-
-**Respuesta `404 Not Found`** (si el ID no existe):
-
-```json
-{ "message": "Usuario no encontrado" }
-```
-
-### Crear un usuario
-
-```http
-POST /api/users
-Content-Type: application/json
-```
-
-**Body:**
-
-```json
-{
-  "name": "María Pérez",
-  "email": "maria@mail.com"
-}
-```
-
-**Respuesta `201 Created`** (el `id` lo asigna MySQL con `AUTO_INCREMENT`):
-
-```json
-{ "id": 3, "name": "María Pérez", "email": "maria@mail.com" }
-```
-
-**Respuesta `400 Bad Request`** (si falta `name` o `email`):
-
-```json
-{ "message": "name y email son obligatorios" }
-```
-
-**Respuesta `400 Bad Request`** (si el email no tiene un formato válido):
-
-```json
-{ "message": "El formato del email no es válido" }
-```
-
-**Respuesta `409 Conflict`** (si el email ya está registrado):
-
-```json
-{ "message": "El email ya está registrado" }
-```
+| Código | Cuándo | Mensaje |
+|---|---|---|
+| `400` | El ID no es un entero positivo (por ejemplo `/api/users/abc`) | `El id debe ser un número entero positivo` |
+| `404` | El ID no existe | `Usuario no encontrado` |
 
 ### Actualizar un usuario
 
@@ -275,15 +346,15 @@ Content-Type: application/json
 
 ```json
 {
-  "name": "Osvaldo Ochoa Actualizado",
-  "email": "osva@gmail.com"
+  "name": "Ana López Actualizada",
+  "email": "ana@mail.com"
 }
 ```
 
 **Respuesta `200 OK`:**
 
 ```json
-{ "id": 1, "name": "Osvaldo Ochoa Actualizado", "email": "osva@gmail.com" }
+{ "id": 1, "name": "Ana López Actualizada", "email": "ana@mail.com" }
 ```
 
 **Respuestas de error:**
@@ -308,17 +379,12 @@ DELETE /api/users/3
 { "message": "Usuario eliminado" }
 ```
 
-**Respuesta `400 Bad Request`** (si el ID no es un entero positivo):
+**Respuestas de error:**
 
-```json
-{ "message": "El id debe ser un número entero positivo" }
-```
-
-**Respuesta `404 Not Found`** (si el ID no existe):
-
-```json
-{ "message": "Usuario no encontrado" }
-```
+| Código | Cuándo | Mensaje |
+|---|---|---|
+| `400` | El ID no es un entero positivo | `El id debe ser un número entero positivo` |
+| `404` | El ID no existe | `Usuario no encontrado` |
 
 ### Rutas inexistentes y errores inesperados
 
@@ -340,7 +406,8 @@ Los errores inesperados responden `500` con un mensaje genérico. El detalle rea
 |---|---|
 | `200` | OK: la petición fue exitosa |
 | `201` | Created: el recurso se creó correctamente |
-| `400` | Bad Request: datos obligatorios ausentes o con formato inválido |
+| `400` | Bad Request: datos ausentes o con formato inválido |
+| `401` | Unauthorized: falta el token, es inválido, o las credenciales son incorrectas |
 | `404` | Not Found: el recurso o la ruta no existe |
 | `409` | Conflict: el email ya está registrado |
 | `500` | Internal Server Error: error inesperado del servidor |
@@ -351,95 +418,49 @@ Los errores inesperados responden `500` con un mensaje genérico. El detalle rea
 
 Puedes usar cualquiera de estas herramientas:
 
-- **Thunder Client** (extensión de VS Code)
+- **Thunder Client** (extensión de VS Code). Para enviar el token: pestaña **Auth** → **Bearer**.
 - **Postman**
 - **curl** desde la terminal
 
-Ejemplo con `curl`:
+Flujo completo con `curl`:
 
 ```bash
-# Listar usuarios
+# 1. Registrar una cuenta
+curl -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Ana López","email":"ana@mail.com","password":"Segura1234"}'
+
+# 2. Iniciar sesión (copia el token de la respuesta)
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"ana@mail.com","password":"Segura1234"}'
+
+# 3. Sin token, la ruta está protegida (devuelve 401)
 curl http://localhost:3000/api/users
 
-# Obtener un usuario por ID
-curl http://localhost:3000/api/users/1
+# 4. Con token, devuelve la lista
+curl http://localhost:3000/api/users \
+  -H "Authorization: Bearer TU_TOKEN"
 
-# Crear un usuario
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"María Pérez","email":"maria@mail.com"}'
-
-# Actualizar un usuario
+# 5. Actualizar un usuario
 curl -X PUT http://localhost:3000/api/users/1 \
   -H "Content-Type: application/json" \
-  -d '{"name":"Osvaldo Actualizado","email":"osva@gmail.com"}'
+  -H "Authorization: Bearer TU_TOKEN" \
+  -d '{"name":"Ana Actualizada","email":"ana@mail.com"}'
 
-# Eliminar un usuario
-curl -X DELETE http://localhost:3000/api/users/3
-
-# Probar una validación (devuelve 400)
-curl http://localhost:3000/api/users/abc
+# 6. Eliminar un usuario
+curl -X DELETE http://localhost:3000/api/users/3 \
+  -H "Authorization: Bearer TU_TOKEN"
 ```
 
 ---
 
 ## Limitaciones actuales
 
-- Los endpoints no requieren autenticación: cualquiera puede crear, modificar o eliminar usuarios.
-- Los usuarios no tienen contraseña, por lo que todavía no existe registro ni inicio de sesión.
+- Cualquier usuario autenticado puede modificar o eliminar a cualquier otro: todavía no existen roles ni verificación de propiedad.
+- Los tokens no se pueden revocar antes de expirar, y no hay *refresh tokens*.
+- No hay límite de intentos de inicio de sesión (*rate limiting*).
 - No hay pruebas automáticas.
-
----
-
-## Próximas actualizaciones
-
-El objetivo es convertir el CRUD en una aplicación completa y demostrable: con registro, inicio de sesión, rutas protegidas y una interfaz web. Se trabaja por fases, cada una con su issue, su rama y su Pull Request.
-
-| Fase | Qué se construye | Qué resuelve | Estado |
-|---|---|---|---|
-| **0. Manejo de errores** | Middleware de errores y `404` en JSON; `409` por email duplicado | Respuestas claras en lugar de errores `500` en HTML | ✅ Completada |
-| **1. Validaciones** | Formato del email, `:id` numérico, validación en middleware | Rechazar datos inválidos antes de llegar al controlador | ✅ Completada |
-| **2. Base de datos** | Columnas `password_hash` y `created_at` en `users` | Preparar la tabla para guardar credenciales | ⏳ Pendiente |
-| **3. Registro** | `POST /api/auth/register` con contraseñas cifradas con **bcrypt** | Crear cuentas sin guardar contraseñas en texto plano | ⏳ Pendiente |
-| **4. Login** | `POST /api/auth/login` que devuelve un token **JWT** | Identificar al usuario en cada petición | ⏳ Pendiente |
-| **5. Rutas protegidas** | Middleware de autenticación | Que solo usuarios con sesión accedan al CRUD | ⏳ Pendiente |
-| **6. Frontend** | Interfaz web con pantallas de registro, login y lista de usuarios | Mostrar el proyecto funcionando de punta a punta | ⏳ Pendiente |
-| **7. Presentación** | README final y video de demostración | Documentar y explicar el proyecto | ⏳ Pendiente |
-
-### Estructura prevista
-
-```
-nodejs_express_mysql_crud/
-├── frontend/                          # Interfaz web (HTML, CSS y JavaScript)
-├── src/
-│   ├── config/
-│   ├── middlewares/
-│   │   ├── error-handler.middleware.js
-│   │   ├── not-found.middleware.js
-│   │   ├── validate-id.middleware.js
-│   │   ├── validate-user.middleware.js
-│   │   └── auth.middleware.js         # Nuevo: verifica el token JWT
-│   └── modules/
-│       ├── auth/                      # Nuevo: registro y login
-│       │   ├── auth.routes.js
-│       │   ├── auth.controller.js
-│       │   └── auth.service.js
-│       └── users/
-└── ...
-```
-
-### Endpoints previstos
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| `POST` | `/api/auth/register` | Crear una cuenta | Público |
-| `POST` | `/api/auth/login` | Iniciar sesión y obtener un token | Público |
-| `GET` | `/api/users` | Listar usuarios | Requiere token |
-| `GET` | `/api/users/:id` | Obtener un usuario | Requiere token |
-| `PUT` | `/api/users/:id` | Actualizar un usuario | Requiere token |
-| `DELETE` | `/api/users/:id` | Eliminar un usuario | Requiere token |
-
-> Las fases pendientes describen trabajo **planificado**, no implementado.
 
 ---
 
@@ -449,7 +470,7 @@ nodejs_express_mysql_crud/
 
 - [x] Servidor con Express y ES Modules
 - [x] Estructura modular
-- [x] Variables de entorno con `.env`
+- [x] Variables de entorno con `.env` y plantilla `.env.example`
 - [x] Conexión a MySQL con pool de conexiones
 - [x] Capa `repository`
 - [x] CRUD completo de usuarios con MySQL
@@ -457,18 +478,11 @@ nodejs_express_mysql_crud/
 - [x] Middleware `not-found` con respuesta en JSON
 - [x] Validación de campos obligatorios y del formato del email
 - [x] Validación del `:id` numérico
+- [x] Esquema de la base de datos versionado (`database/schema.sql`)
+- [x] Registro con contraseña cifrada (bcrypt)
+- [x] Login con token JWT
+- [x] Middleware de autenticación para proteger rutas
 - [x] Flujo de trabajo con issues, ramas y Pull Requests
-
-### Pendiente
-
-- [ ] Registro de usuarios con contraseña cifrada (bcrypt)
-- [ ] Login con token JWT
-- [ ] Middleware de autenticación para proteger rutas
-- [ ] Capa `service`
-- [ ] Archivo `.env.example`
-- [ ] Interfaz web (frontend)
-- [ ] Pruebas automáticas
-- [ ] Video de demostración
 
 ---
 
